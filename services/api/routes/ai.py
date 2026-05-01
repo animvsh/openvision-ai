@@ -4,6 +4,7 @@ from models.schemas import AISummarizeEvent, AISummarizeSession
 from pydantic import ValidationError
 import boto3
 import json
+import os
 
 
 def call_bedrock(summary_type: str, payload: dict) -> str:

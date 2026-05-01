@@ -1,0 +1,1 @@
+export { getDynamoDBClient, getSQSClient, getSNSClient, getRekognitionClient, getBedrockClient, getDocClient, getCorsOrigins, getTableName, DYNAMODB_TABLE_CAMERAS, DYNAMODB_TABLE_EVENTS, DYNAMODB_TABLE_ALERTS, SNS_TOPIC_ARN, SQS_QUEUE_URL } from './config'
