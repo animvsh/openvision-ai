@@ -1,0 +1,23 @@
+{
+  "S3PutTrigger": {
+    "Event": "s3:ObjectCreated:*",
+    "Filter": {
+      "Key": {
+        "FilterRules": [
+          {
+            "Name": "prefix",
+            "Value": "videos/"
+          }
+        ]
+      }
+    }
+  },
+  "Description": "S3 trigger configuration for video processing Lambda functions",
+  "SupportedEvents": [
+    "s3:ObjectCreated:*",
+    "s3:ObjectCreated:Put",
+    "s3:ObjectCreated:Post",
+    "s3:ObjectCreated:Copy",
+    "s3:ObjectCreated:CompleteMultipartUpload"
+  ]
+}
