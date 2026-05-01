@@ -4,9 +4,9 @@ import os
 from datetime import datetime
 from decimal import Decimal
 
-rekognition = boto3.client("rekognition")
-dynamodb = boto3.resource("dynamodb")
-kinesis = boto3.client("kinesis")
+rekognition = boto3.client("rekognition", region_name=os.environ.get('AWS_REGION', 'us-east-1'))
+dynamodb = boto3.resource("dynamodb", region_name=os.environ.get('AWS_REGION', 'us-east-1'))
+kinesis = boto3.client("kinesis", region_name=os.environ.get('AWS_REGION', 'us-east-1'))
 
 TABLE_NAME = os.environ.get("DYNAMODB_TABLE", "VideoProcessingJobs")
 STREAM_NAME = os.environ.get("KINESIS_STREAM", "DetectionEvents")

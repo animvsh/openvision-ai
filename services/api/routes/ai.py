@@ -8,7 +8,7 @@ import json
 
 def call_bedrock(summary_type: str, payload: dict) -> str:
     try:
-        client = boto3.client("bedrock-agent-runtime", region="us-east-1")
+        client = boto3.client("bedrock-agent-runtime", region=os.environ.get('AWS_REGION', 'us-east-1'))
         if summary_type == "event":
             response = client.invoke_agent(
                 agentId=payload.get("agent_id", ""),

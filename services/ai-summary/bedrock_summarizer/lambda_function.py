@@ -2,8 +2,13 @@ import boto3
 from botocore.config import Config
 import json
 
-bedrock = boto3.client('bedrock-runtime', region_name='us-east-1',
-    config=Config(connect_timeout=5, read_timeout=60))
+import os
+
+bedrock = boto3.client(
+    'bedrock-runtime',
+    region_name=os.environ.get('AWS_REGION', 'us-east-1'),
+    config=Config(connect_timeout=5, read_timeout=60)
+)
 
 SYSTEM_PROMPT = """You are an AI safety and engagement analyst for OpenVision AI.
 You analyze camera intelligence events and provide clear, ethical summaries.
