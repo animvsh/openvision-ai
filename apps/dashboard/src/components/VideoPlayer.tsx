@@ -1,10 +1,5 @@
 import { useEffect, useRef } from 'react'
-
-interface ObjectDetection {
-  class: string
-  score: number
-  bbox: [number, number, number, number]
-}
+import { ObjectDetection } from '@/hooks/useLiveCamera'
 
 interface FaceDetection {
   id: number

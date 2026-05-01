@@ -2,13 +2,19 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Install dependencies
+# Install all dependencies (including dev for build)
 COPY package*.json ./
-RUN npm ci --only=production
+RUN npm ci
+
+# Copy source and build
+COPY . .
+RUN npm run build
+
+# Prune to production only
+RUN npm prune --production
 
 # Copy built assets
 COPY dist ./dist
-COPY package*.json ./
 
 # Expose port
 EXPOSE 3001
