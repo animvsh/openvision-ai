@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Link } from 'react-router-dom'
-import { Dashboard, CameraGrid, LiveCamera, EventTimeline, Analytics } from './pages'
+import { Dashboard, CameraGrid, LiveCamera, Events, Analytics, AIAssistant, Settings, Health } from './pages'
 
 export default function App() {
   return (
@@ -16,6 +16,9 @@ export default function App() {
                 <Link to="/cameras" className="text-gray-400 hover:text-neon-cyan transition-colors">Cameras</Link>
                 <Link to="/events" className="text-gray-400 hover:text-neon-cyan transition-colors">Events</Link>
                 <Link to="/analytics" className="text-gray-400 hover:text-neon-cyan transition-colors">Analytics</Link>
+                <Link to="/ai" className="text-gray-400 hover:text-neon-cyan transition-colors">AI Assistant</Link>
+                <Link to="/health" className="text-gray-400 hover:text-neon-cyan transition-colors">Health</Link>
+                <Link to="/settings" className="text-gray-400 hover:text-neon-cyan transition-colors">Settings</Link>
               </div>
             </div>
             <div className="text-sm text-gray-500">OpenVision AI Dashboard</div>
@@ -25,8 +28,11 @@ export default function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/cameras" element={<CameraGrid />} />
           <Route path="/camera/:id" element={<LiveCamera />} />
-          <Route path="/events" element={<EventTimeline />} />
+          <Route path="/events" element={<Events />} />
           <Route path="/analytics" element={<Analytics />} />
+          <Route path="/ai" element={<AIAssistant />} />
+          <Route path="/health" element={<Health />} />
+          <Route path="/settings" element={<Settings />} />
         </Routes>
       </div>
     </BrowserRouter>

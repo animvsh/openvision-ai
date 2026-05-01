@@ -22,18 +22,22 @@ interface ButtonProps {
   variant?: 'primary' | 'secondary'
   children: React.ReactNode
   onClick?: () => void
+  type?: 'button' | 'submit' | 'reset'
+  disabled?: boolean
   className?: string
 }
 
-export function Button({ variant = 'primary', children, onClick, className = '' }: ButtonProps) {
+export function Button({ variant = 'primary', children, onClick, type = 'button', disabled = false, className = '' }: ButtonProps) {
   const styles = {
     primary: 'border-2 border-neon-cyan text-neon-cyan hover:bg-neon-cyan hover:text-dark-bg transition-all duration-300 shadow-[0_0_10px_rgba(0,255,255,0.3)] hover:shadow-[0_0_20px_rgba(0,255,255,0.6)]',
     secondary: 'border-2 border-neon-magenta text-neon-magenta hover:bg-neon-magenta hover:text-dark-bg transition-all duration-300 shadow-[0_0_10px_rgba(255,0,255,0.3)] hover:shadow-[0_0_20px_rgba(255,0,255,0.6)]',
   }
   return (
     <button
+      type={type}
       onClick={onClick}
-      className={`px-4 py-2 rounded font-medium ${styles[variant]} ${className}`}
+      disabled={disabled}
+      className={`px-4 py-2 rounded font-medium ${styles[variant]} ${disabled ? 'opacity-50 cursor-not-allowed' : ''} ${className}`}
     >
       {children}
     </button>

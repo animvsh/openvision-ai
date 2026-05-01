@@ -11,42 +11,36 @@ import { ObjectDetection } from '@/hooks/useLiveCamera'
 // Phone alert audio context for playing sound
 let phoneAlertAudioContext: AudioContext | null = null
 
-function playPhoneAlertSound() {
+function playPhoneAlertSound(pattern: 'single' | 'double' | 'triple' = 'double') {
   try {
     if (!phoneAlertAudioContext) {
       phoneAlertAudioContext = new (window.AudioContext || (window as typeof window & { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
     }
 
     const ctx = phoneAlertAudioContext
-    const oscillator = ctx.createOscillator()
-    const gainNode = ctx.createGain()
+    const beepCount = pattern === 'single' ? 1 : pattern === 'double' ? 2 : 3
+    const beepDelay = 150
+    const beepDuration = 0.25
 
-    oscillator.connect(gainNode)
-    gainNode.connect(ctx.destination)
+    for (let i = 0; i < beepCount; i++) {
+      setTimeout(() => {
+        const oscillator = ctx.createOscillator()
+        const gainNode = ctx.createGain()
 
-    // Alert beep pattern - A5 note
-    oscillator.frequency.setValueAtTime(880, ctx.currentTime)
-    oscillator.type = 'sine'
+        oscillator.connect(gainNode)
+        gainNode.connect(ctx.destination)
 
-    gainNode.gain.setValueAtTime(0.3, ctx.currentTime)
-    gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3)
+        // A5 note for high urgency, E5 for normal
+        oscillator.frequency.setValueAtTime(pattern === 'triple' ? 1046.5 : 880, ctx.currentTime)
+        oscillator.type = 'sine'
 
-    oscillator.start(ctx.currentTime)
-    oscillator.stop(ctx.currentTime + 0.3)
+        gainNode.gain.setValueAtTime(0.25, ctx.currentTime)
+        gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + beepDuration)
 
-    // Second beep
-    setTimeout(() => {
-      const osc2 = ctx.createOscillator()
-      const gain2 = ctx.createGain()
-      osc2.connect(gain2)
-      gain2.connect(ctx.destination)
-      osc2.frequency.setValueAtTime(880, ctx.currentTime)
-      osc2.type = 'sine'
-      gain2.gain.setValueAtTime(0.3, ctx.currentTime)
-      gain2.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3)
-      osc2.start(ctx.currentTime)
-      osc2.stop(ctx.currentTime + 0.3)
-    }, 150)
+        oscillator.start(ctx.currentTime)
+        oscillator.stop(ctx.currentTime + beepDuration)
+      }, i * beepDelay)
+    }
   } catch (err) {
     console.error('Failed to play phone alert sound:', err)
   }
@@ -251,6 +245,16 @@ export default function LiveCamera() {
           </Button>
         </div>
       </div>
+
+      {phoneAlert && (
+        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 animate-bounce">
+          <div className="bg-red-600 text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-3 border-2 border-red-400">
+            <span className="text-2xl">📱</span>
+            <span className="font-bold">Phone Detected!</span>
+            <span className="text-red-200 text-sm">Violation will be logged</span>
+          </div>
+        </div>
+      )}
 
       {error && (
         <Card className="p-4 bg-red-500/10 border-red-500/30">

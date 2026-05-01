@@ -12,6 +12,9 @@ import camerasRouter from './routes/cameras';
 import eventsRouter from './routes/events';
 import authRouter from './routes/auth';
 import analyticsRouter from './routes/analytics';
+import alertsRouter from './routes/alerts';
+import rulesRouter from './routes/rules';
+import aiRouter from './routes/ai';
 
 // Import WebSocket
 import { initializeWebSocket, closeWebSocket } from './services/websocket';
@@ -69,6 +72,9 @@ app.use('/cameras', camerasRouter);
 app.use('/events', eventsRouter);
 app.use('/auth', authRouter);
 app.use('/analytics', analyticsRouter);
+app.use('/alerts', alertsRouter);
+app.use('/rules', rulesRouter);
+app.use('/ai', aiRouter);
 
 // 404 handler
 app.use((req, res) => {
@@ -112,8 +118,15 @@ const httpServer = server.listen(PORT, () => {
 ║   - POST /auth/login                                         ║
 ║   - POST /auth/register                                      ║
 ║   - POST /auth/logout                                        ║
-║   - GET  /analytics/engagement                               ║
-║   - GET  /analytics/events                                    ║
+║   - GET  /analytics/engagement                              ║
+║   - GET  /analytics/events                                   ║
+║   - GET  /rules                                               ║
+║   - POST /rules                                               ║
+║   - GET  /rules/:id                                          ║
+║   - PUT  /rules/:id                                          ║
+║   - DELETE /rules/:id                                        ║
+║   - POST /ai/query                                           ║
+║   - GET  /ai/camera/:cameraId/context                        ║
 ║   - WS   /ws                                                  ║
 ║                                                              ║
 ║   AWS Configuration: ${process.env.AWS_ACCESS_KEY_ID ? 'Configured' : 'Using mock data'}            ║
