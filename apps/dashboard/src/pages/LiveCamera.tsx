@@ -4,32 +4,149 @@ import { VideoPlayer } from '@/components/VideoPlayer'
 import { Card, Button, Badge } from '@/components/ui'
 import { useCameraStore } from '@/stores/cameraStore'
 import { mockCameras } from '@/data/mockData'
+import { useMediaPipe, FaceDetection } from '@/hooks/useMediaPipe'
+import { useObjectDetection } from '@/hooks/useObjectDetection'
+import { ObjectDetection } from '@/hooks/useLiveCamera'
 
-interface ObjectDetection {
-  class: string
-  score: number
-  bbox: [number, number, number, number]
+// Phone alert audio context for playing sound
+let phoneAlertAudioContext: AudioContext | null = null
+
+function playPhoneAlertSound() {
+  try {
+    if (!phoneAlertAudioContext) {
+      phoneAlertAudioContext = new (window.AudioContext || (window as typeof window & { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
+    }
+
+    const ctx = phoneAlertAudioContext
+    const oscillator = ctx.createOscillator()
+    const gainNode = ctx.createGain()
+
+    oscillator.connect(gainNode)
+    gainNode.connect(ctx.destination)
+
+    // Alert beep pattern - A5 note
+    oscillator.frequency.setValueAtTime(880, ctx.currentTime)
+    oscillator.type = 'sine'
+
+    gainNode.gain.setValueAtTime(0.3, ctx.currentTime)
+    gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3)
+
+    oscillator.start(ctx.currentTime)
+    oscillator.stop(ctx.currentTime + 0.3)
+
+    // Second beep
+    setTimeout(() => {
+      const osc2 = ctx.createOscillator()
+      const gain2 = ctx.createGain()
+      osc2.connect(gain2)
+      gain2.connect(ctx.destination)
+      osc2.frequency.setValueAtTime(880, ctx.currentTime)
+      osc2.type = 'sine'
+      gain2.gain.setValueAtTime(0.3, ctx.currentTime)
+      gain2.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3)
+      osc2.start(ctx.currentTime)
+      osc2.stop(ctx.currentTime + 0.3)
+    }, 150)
+  } catch (err) {
+    console.error('Failed to play phone alert sound:', err)
+  }
 }
 
 export default function LiveCamera() {
   const { id } = useParams()
   const [mode, setMode] = useState<'live' | 'recorded'>('live')
   const [stream, setStream] = useState<MediaStream | null>(null)
-  const [detections, setDetections] = useState<ObjectDetection[]>([])
+  const [faceDetections, setFaceDetections] = useState<FaceDetection[]>([])
+  const [objectDetections, setObjectDetections] = useState<ObjectDetection[]>([])
   const [fps, setFps] = useState(0)
   const [attentionScore, setAttentionScore] = useState(0)
   const [phoneAlert, setPhoneAlert] = useState(false)
   const [isActive, setIsActive] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
   const videoRef = useRef<HTMLVideoElement | null>(null)
+  const animationFrameRef = useRef<number | null>(null)
+  const lastFrameTimeRef = useRef<number>(0)
+  const phoneAlertPlayedRef = useRef<boolean>(false)
 
   const cameras = useCameraStore((s) => s.cameras)
   const setCameras = useCameraStore((s) => s.setCameras)
+
+  // Initialize MediaPipe face detection
+  const { detect: detectFaces, isInitialized: faceInitialized, cleanup: cleanupFaceMesh } = useMediaPipe({
+    frequency: 200, // ~5 FPS
+    onFaceDetection: (detectedFaces) => {
+      setFaceDetections(detectedFaces)
+    },
+  })
+
+  // Initialize TensorFlow.js object detection
+  const { detect: detectObjects, setVideo, startDetection: startObjectDetection, stopDetection: stopObjectDetection, isInitialized: objectInitialized } = useObjectDetection({
+    frequency: 200, // ~5 FPS
+    onObjectDetection: (detectedObjs) => {
+      setObjectDetections(detectedObjs)
+    },
+  })
 
   useEffect(() => {
     if (cameras.length === 0) setCameras(mockCameras)
   }, [cameras.length, setCameras])
 
+  // Calculate attention score based on face centering
+  const calculateAttentionScore = useCallback((faceDetectionList: FaceDetection[]): number => {
+    if (faceDetectionList.length === 0) return 0
+
+    let totalScore = 0
+    for (const face of faceDetectionList) {
+      const box = face.boundingBox
+      const centerX = box.x + box.width / 2
+      const centerY = box.y + box.height / 2
+
+      // Ideal center is at 0.5, 0.5 (middle of frame)
+      const distanceFromCenter = Math.sqrt(
+        Math.pow(centerX - 0.5, 2) + Math.pow(centerY - 0.5, 2)
+      )
+
+      // Score based on proximity to center (closer = higher score)
+      const centerScore = 1 - Math.min(distanceFromCenter * 2, 1)
+
+      // Size score (larger face = more present = higher score)
+      const sizeScore = Math.min((box.width * box.height) / 0.5, 1)
+
+      totalScore += (centerScore * 0.4 + sizeScore * 0.6) * face.score
+    }
+
+    return Math.round((totalScore / faceDetectionList.length) * 100)
+  }, [])
+
+  // Detection loop running at ~5 FPS
+  const runDetection = useCallback(async (video: HTMLVideoElement) => {
+    const now = Date.now()
+    const frameInterval = 200 // ~5 FPS
+
+    if (now - lastFrameTimeRef.current >= frameInterval) {
+      lastFrameTimeRef.current = now
+
+      // Run both detections in parallel
+      await Promise.all([
+        detectFaces(video),
+        detectObjects(video),
+      ])
+
+      // Update attention score based on face detections
+      setAttentionScore(calculateAttentionScore(faceDetections))
+
+      // Calculate FPS
+      setFps(Math.round(1000 / frameInterval))
+    }
+
+    // Continue the loop if still active
+    if (videoRef.current && isActive) {
+      animationFrameRef.current = requestAnimationFrame(() => runDetection(video))
+    }
+  }, [detectFaces, detectObjects, calculateAttentionScore, faceDetections, isActive])
+
+  // Start camera with CV processing
   const startCamera = useCallback(async () => {
     try {
       const mediaStream = await navigator.mediaDevices.getUserMedia({
@@ -38,31 +155,45 @@ export default function LiveCamera() {
       setStream(mediaStream)
       setIsActive(true)
       setError(null)
+      setPhoneAlert(false)
+      phoneAlertPlayedRef.current = false
 
-      // Simulate detections periodically
-      const interval = setInterval(() => {
-        setFps(Math.floor(Math.random() * 5) + 25)
-        setDetections([
-          { class: 'person', score: 0.92, bbox: [100, 50, 200, 300] },
-        ])
-      }, 100)
-
-      return () => clearInterval(interval)
+      // Wait for video to be ready
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = mediaStream
+          startObjectDetection()
+          runDetection(videoRef.current)
+        }
+      }, 500)
     } catch (err) {
       setError('Failed to access camera. Please grant camera permissions.')
       setIsActive(false)
     }
-  }, [])
+  }, [startObjectDetection, runDetection])
 
+  // Stop camera and cleanup
   const stopCamera = useCallback(() => {
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current)
+      animationFrameRef.current = null
+    }
+
+    stopObjectDetection()
+    cleanupFaceMesh()
+
     if (stream) {
       stream.getTracks().forEach(track => track.stop())
       setStream(null)
     }
     setIsActive(false)
-    setDetections([])
-  }, [stream])
+    setFaceDetections([])
+    setObjectDetections([])
+    setPhoneAlert(false)
+    phoneAlertPlayedRef.current = false
+  }, [stream, stopObjectDetection, cleanupFaceMesh])
 
+  // Handle mode switch
   useEffect(() => {
     if (mode === 'live') {
       startCamera()
@@ -72,9 +203,38 @@ export default function LiveCamera() {
     return () => stopCamera()
   }, [mode, startCamera, stopCamera])
 
+  // Phone detection alert
+  useEffect(() => {
+    const phoneCount = objectDetections.filter(
+      (d) => d.class.toLowerCase().includes('phone')
+    ).length
+
+    if (phoneCount > 0 && !phoneAlertPlayedRef.current) {
+      setPhoneAlert(true)
+      phoneAlertPlayedRef.current = true
+      playPhoneAlertSound()
+
+      // Auto-dismiss alert after 3 seconds
+      setTimeout(() => {
+        setPhoneAlert(false)
+      }, 3000)
+    } else if (phoneCount === 0) {
+      setPhoneAlert(false)
+      phoneAlertPlayedRef.current = false
+    }
+  }, [objectDetections])
+
+  // Set video element reference for object detection
+  const setVideoRef = useCallback((video: HTMLVideoElement | null) => {
+    videoRef.current = video
+    if (video) {
+      setVideo(video)
+    }
+  }, [setVideo])
+
   const cameraInfo = cameras.find((c) => c.id === id)
-  const personCount = detections.filter((d) => d.class === 'person').length
-  const phoneCount = detections.filter((d) => d.class.toLowerCase().includes('phone')).length
+  const personCount = objectDetections.filter((d) => d.class === 'person').length
+  const phoneCount = objectDetections.filter((d) => d.class.toLowerCase().includes('phone')).length
 
   return (
     <div className="p-6 space-y-6">
@@ -102,13 +262,24 @@ export default function LiveCamera() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
           <Card className="p-0 overflow-hidden border-dark-surface">
-            <VideoPlayer stream={stream} isLive={mode === 'live'} objectDetections={detections} showFps fps={fps} />
+            <VideoPlayer
+              stream={stream}
+              isLive={mode === 'live'}
+              faceDetections={faceDetections}
+              objectDetections={objectDetections}
+              showFps
+              fps={fps}
+            />
           </Card>
         </div>
 
         <Card className="p-4">
           <h2 className="font-semibold text-gray-100 mb-4">Real-time Insights</h2>
           <div className="space-y-3">
+            <div className="flex justify-between py-2 border-b border-dark-surface">
+              <span className="text-gray-400">Faces Detected</span>
+              <span className="font-medium text-neon-cyan">{faceDetections.length}</span>
+            </div>
             <div className="flex justify-between py-2 border-b border-dark-surface">
               <span className="text-gray-400">Persons</span>
               <span className="font-medium text-neon-cyan">{personCount}</span>
@@ -117,7 +288,7 @@ export default function LiveCamera() {
               <span className="text-gray-400">Phones Detected</span>
               <span className={`font-medium ${phoneCount > 0 ? 'text-red-400' : 'text-gray-300'}`}>
                 {phoneCount}
-                {phoneAlert && <span className="ml-2 text-xs bg-red-500/20 text-red-400 px-2 py-0.5 rounded border border-red-500/50">ALERT</span>}
+                {phoneAlert && <span className="ml-2 text-xs bg-red-500/20 text-red-400 px-2 py-0.5 rounded border border-red-500/50 animate-pulse">ALERT</span>}
               </span>
             </div>
             <div className="flex justify-between py-2 border-b border-dark-surface">
@@ -129,14 +300,16 @@ export default function LiveCamera() {
               <span className="font-medium text-gray-200">{fps}</span>
             </div>
             <div className="flex justify-between py-2 border-b border-dark-surface">
-              <span className="text-gray-400">Status</span>
-              <Badge variant={isActive ? 'low' : 'high'}>{isActive ? 'LIVE' : 'OFFLINE'}</Badge>
+              <span className="text-gray-400">CV Status</span>
+              <Badge variant={faceInitialized && objectInitialized ? 'low' : 'medium'}>
+                {faceInitialized && objectInitialized ? 'READY' : 'INIT...'}
+              </Badge>
             </div>
           </div>
 
           {cameraInfo?.insights && cameraInfo.insights.length > 0 && (
             <div className="mt-4 pt-4 border-t border-dark-surface">
-              <h3 className="text-sm font-medium text-gray-300 mb-2">Camera Insights</h3>
+              <h3 className="text-sm font-medium text-gray-300 mb-2"> Camera Insights</h3>
               <div className="space-y-2">
                 {cameraInfo.insights.map((insight, i) => (
                   <div key={i} className="flex justify-between text-sm">
@@ -152,14 +325,21 @@ export default function LiveCamera() {
 
       {mode === 'live' && (
         <Card className="p-4">
-          <h2 className="font-semibold text-gray-100 mb-4">Detected Objects ({detections.length})</h2>
+          <h2 className="font-semibold text-gray-100 mb-4">Detected Objects ({objectDetections.length + faceDetections.length})</h2>
           <div className="flex flex-wrap gap-2">
-            {detections.map((det, i) => (
-              <Badge key={i} variant={det.score > 0.7 ? 'high' : 'medium'}>
+            {faceDetections.map((face, i) => (
+              <Badge key={`face-${i}`} variant="medium" className="border-cyan-500 text-cyan-400">
+                Face {Math.round(face.score * 100)}%
+              </Badge>
+            ))}
+            {objectDetections.map((det, i) => (
+              <Badge key={`obj-${i}`} variant={det.score > 0.7 ? 'high' : 'medium'}>
                 {det.class} ({Math.round(det.score * 100)}%)
               </Badge>
             ))}
-            {detections.length === 0 && <span className="text-gray-500">No objects detected - Point camera at objects</span>}
+            {objectDetections.length === 0 && faceDetections.length === 0 && (
+              <span className="text-gray-500">No objects detected - Point camera at objects</span>
+            )}
           </div>
         </Card>
       )}
