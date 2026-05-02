@@ -31,7 +31,7 @@ const broadcastToTopic = (topic: string, message: WebSocketMessage): void => {
 const broadcastToCamera = (cameraId: string, message: WebSocketMessage): void => {
   const messageStr = JSON.stringify(message);
   subscriptions.forEach((sub, clientId) => {
-    if (sub.cameraIds && (sub.cameraIds.has(cameraId) || sub.cameraIds.has('all'))) {
+    if (sub.cameraIds.has(cameraId) || sub.cameraIds.has('all')) {
       const client = clients.get(clientId);
       if (client && client.readyState === WebSocket.OPEN) {
         client.send(messageStr);
@@ -121,8 +121,8 @@ export const initializeWebSocket = (server: Server): WebSocketServer => {
             if (payload.topics && sub) {
               payload.topics.forEach(t => sub.topics.delete(t));
             }
-            if (payload.cameraIds && sub && sub.cameraIds) {
-              payload.cameraIds.forEach(c => sub.cameraIds!.delete(c));
+            if (payload.cameraIds && sub) {
+              payload.cameraIds.forEach(c => sub.cameraIds.delete(c));
             }
             break;
           }
