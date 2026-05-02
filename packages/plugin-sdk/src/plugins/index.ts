@@ -1,30 +1,9 @@
 /**
- * Plugin SDK - Core interfaces for building SecureOS plugins
- *
- * @example
- * import { DetectionPlugin, ModePlugin, AlertPlugin, DashboardWidget } from '@openvision/plugin-sdk';
+ * Plugin SDK - Plugin Interfaces
+ * All plugin type definitions
  */
 
-import type {
-  VideoFrame,
-  Detection,
-  Rule,
-  WidgetConfig,
-  Alert,
-  WidgetProps,
-} from '../../shared-types/src';
-
-// Re-export shared types for convenience
-export {
-  type VideoFrame,
-  type Detection,
-  type Rule,
-  type WidgetConfig,
-  type Alert,
-  type WidgetProps,
-} from '../../shared-types/src';
-
-// Plugin interfaces
+// Detection Plugins
 export {
   type DetectionPlugin,
   type YOLOConfig,
@@ -39,8 +18,9 @@ export {
   type DetectionPluginRegistry,
   createYOLOPlugin,
   createCustomModelPlugin,
-} from './plugins/detectionPlugin';
+} from './detectionPlugin';
 
+// Mode Plugins
 export {
   type ModePlugin,
   type ModeType,
@@ -66,8 +46,9 @@ export {
   createExamIntegrityModePlugin,
   createSecurityModePlugin,
   createFacilitySafetyModePlugin,
-} from './plugins/modePlugin';
+} from './modePlugin';
 
+// Alert Plugins
 export {
   type AlertPlugin,
   type AlertChannel,
@@ -90,8 +71,9 @@ export {
   createSESAlertPlugin,
   createSNSAlertPlugin,
   createWebhookAlertPlugin,
-} from './plugins/alertPlugin';
+} from './alertPlugin';
 
+// Widget Plugins
 export {
   type WidgetPlugin,
   type WidgetType,
@@ -120,61 +102,4 @@ export {
   createMapWidgetPlugin,
   createTimelineWidgetPlugin,
   createCustomWidgetPlugin,
-} from './plugins/widgetPlugin';
-
-// Registry
-export {
-  type Registry,
-  pluginRegistry,
-} from './registry';
-
-// Loader
-export {
-  type LoaderOptions,
-  loadPlugin,
-  loadPluginFromUrl,
-  loadPluginFromModule,
-  isDetectionPlugin,
-  isModePlugin,
-  isAlertPlugin,
-  isWidgetPlugin,
-} from './loader';
-
-// Manifest
-export {
-  type PluginManifestSchema,
-  CURRENT_API_VERSION,
-  validateManifest,
-  yoloPluginManifestExample,
-  classroomModePluginManifestExample,
-  telegramAlertPluginManifestExample,
-  chartWidgetPluginManifestExample,
-} from './manifest';
-
-// Protocol
-export {
-  type ProtocolDirection,
-  type ProtocolMessage,
-  type ToPluginMessage,
-  type FromPluginMessage,
-  type FrameMessage,
-  type ConfigUpdateMessage,
-  type StopMessage,
-  type ReloadMessage,
-  type StatusMessage,
-  type InitMessage,
-  type ReadyMessage,
-  type DetectionMessage,
-  type PerfStatsMessage,
-  type ErrorMessage,
-  type StatusResponseMessage,
-  ProtocolParser,
-  type PluginProcess,
-  type PluginRunnerOptions,
-  runPlugin,
-  sendFrame,
-  sendConfigUpdate,
-  sendStop,
-  parseDetectionOutput,
-  protocolExample,
-} from './protocol';
+} from './widgetPlugin';

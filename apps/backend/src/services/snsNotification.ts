@@ -3,7 +3,6 @@ import {
   PublishCommand,
   CreateTopicCommand,
   SubscribeCommand,
-  TopicAttributes,
 } from '@aws-sdk/client-sns';
 
 export interface SnsNotificationConfig {
