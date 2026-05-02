@@ -3,7 +3,7 @@
  * Integration with AWS Bedrock (Claude) for camera natural language queries
  */
 
-import { getAwsCredentials, getBedrockClient } from '../aws/config';
+import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
 
 export interface AIQueryRequest {
   cameraId: string;
@@ -24,55 +24,53 @@ export interface AIQueryResponse {
 
 interface BedrockMessage {
   role: 'user' | 'assistant';
-  content: string | { type: string; source?: { type: string; bytes?: string } }[];
+  content: string;
 }
+
+const generateMockResponse = (cameraId: string, query: string): string => {
+  return `Based on the camera ${cameraId}, I can see the scene is active. For your query about "${query}", I recommend checking the Events page for detailed analytics. The AI analysis is running in demo mode - configure AWS Bedrock credentials for full functionality.`;
+};
 
 export const queryCamera = async (request: AIQueryRequest): Promise<AIQueryResponse> => {
   try {
-    const credentials = getAwsCredentials();
-
-    if (!credentials) {
-      return {
-        success: false,
-        error: 'AWS credentials not configured',
-        cameraId: request.cameraId,
-        timestamp: new Date().toISOString(),
-      };
-    }
-
-    const client = getBedrockClient();
+    const region = process.env.AWS_REGION || 'us-east-1';
+    const client = new BedrockRuntimeClient({ region });
 
     const systemPrompt = `You are OpenVision AI Assistant, a computer vision expert. You analyze camera feeds and provide insights about:
 - What is happening in the camera scene
 - Object detection and tracking
 - People counting and crowd analysis
 - Security alerts and anomalies
-- General activity monitoring
+- General activity monitoring`;
 
-Provide concise, informative responses about the camera's content.`;
-
-    const userMessage = `Camera: ${request.cameraName || request.cameraId}
-
-Query: ${request.query}
-
-Provide a helpful response based on typical camera monitoring scenarios.`;
+    const userMessage = request.cameraName 
+      ? `Camera ${request.cameraName} (${request.cameraId}): ${request.query}`
+      : `Camera ${request.cameraId}: ${request.query}`;
 
     const messages: BedrockMessage[] = [
       { role: 'user', content: userMessage }
     ];
 
-    const bedrockRequest = {
-      modelId: 'anthropic.claude-3-sonnet-4-20250514',
-      content: messages,
-      system: systemPrompt,
-    };
-
     try {
-      const response = await client.invokeModel(bedrockRequest);
+      const command = new InvokeModelCommand({
+        modelId: 'anthropic.claude-3-sonnet-4-20250514',
+        contentType: 'application/json',
+        accept: 'application/json',
+        body: JSON.stringify({
+          anthropic_version: 'bedrock-2023-05-31',
+          max_tokens: 1024,
+          system: systemPrompt,
+          messages: messages
+        }),
+      });
+      
+      const response = await client.send(command);
+      const responseBody = JSON.parse(new TextDecoder().decode(response.body));
+      const text = responseBody.content?.[0]?.text || 'No response generated';
 
       return {
         success: true,
-        response: response,
+        response: text,
         cameraId: request.cameraId,
         cameraName: request.cameraName,
         timestamp: new Date().toISOString(),
@@ -101,36 +99,29 @@ Provide a helpful response based on typical camera monitoring scenarios.`;
   }
 };
 
-const generateMockResponse = (cameraId: string, query: string): string => {
-  const lowerQuery = query.toLowerCase();
-
-  if (lowerQuery.includes('people') || lowerQuery.includes('count')) {
-    return `Based on the camera feed analysis, I detect approximately 3-5 people in the frame currently. There has been moderate foot traffic in the last hour with peak activity around 2-4 PM.`;
-  }
-
-  if (lowerQuery.includes('vehicle') || lowerQuery.includes('car')) {
-    return `Vehicle detection active on camera ${cameraId}. Currently tracking 2 vehicles in the field of view - one entering from the north gate and one parked near the loading zone. License plate recognition is enabled.`;
-  }
-
-  if (lowerQuery.includes('alert') || lowerQuery.includes('security')) {
-    return `Security monitoring active on camera ${cameraId}. Current status: No active alerts. All motion detection zones are clear. Entry points are being monitored with authorized personnel verified.`;
-  }
-
-  if (lowerQuery.includes('status') || lowerQuery.includes('health')) {
-    return `Camera ${cameraId} status: Online and functioning normally. Video quality: 1080p @ 30fps. AI features active: Face detection, motion tracking, zone monitoring. No hardware issues detected.`;
-  }
-
-  if (lowerQuery.includes('motion') || lowerQuery.includes('activity')) {
-    return `Motion detection on camera ${cameraId}: Moderate activity detected in the central zone within the last 15 minutes. Primary movement patterns show typical pedestrian behavior near the entrance area.`;
-  }
-
-  return `Camera ${cameraId} analysis complete. The current scene shows normal operational status with all AI monitoring features functioning within expected parameters.`;
+export const getAIContext = async (cameraId: string) => {
+  return {
+    cameraId,
+    availableCapabilities: [
+      'object_detection',
+      'face_recognition', 
+      'motion_detection',
+      'ppe_compliance',
+      'zone_monitoring'
+    ],
+    supportedQueries: [
+      'What is happening in the camera?',
+      'How many people are there?',
+      'Are there any alerts?',
+      'Is PPE being worn correctly?'
+    ]
+  };
 };
 
-export const getCameraContext = async (cameraId: string, cameraName?: string): Promise<{ summary: string; activeAlerts: number; lastActivity: string }> => {
-  return {
-    summary: `Camera ${cameraName || cameraId} is currently operational with all AI features enabled. Real-time object detection and tracking are active.`,
-    activeAlerts: 0,
-    lastActivity: new Date().toISOString(),
-  };
+export const getCameraContext = async (cameraId: string) => {
+  return getAIContext(cameraId);
+};
+
+export const isBedrockConfigured = (): boolean => {
+  return !!(process.env.AWS_REGION || process.env.AWS_ACCESS_KEY_ID);
 };

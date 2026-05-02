@@ -102,3 +102,10 @@ export interface WebSocketMessage {
   payload: unknown;
   timestamp: string;
 }
+
+export interface WebSocketSubscription {
+  clientId: string;
+  topics: Set<string>;
+  cameraIds?: Set<string>;
+  filters?: Record<string, unknown>;
+}

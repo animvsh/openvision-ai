@@ -107,8 +107,19 @@ router.put('/:id', (req: Request, res: Response) => {
   }
 });
 
-router.patch('/:id', (req: Request, res: Response) => {
-  router.put('/:id')(req, res);
+router.patch('/:id', (req: Request, res: Response, next: Function) => {
+  const { id } = req.params;
+  const updates = req.body;
+  try {
+    const updated = updateRule(id, updates);
+    if (!updated) {
+      res.status(404).json(errorResponse('Rule not found'));
+      return;
+    }
+    res.json(successResponse(updated));
+  } catch (error) {
+    res.status(500).json(errorResponse(error instanceof Error ? error.message : 'Failed to update rule'));
+  }
 });
 
 router.delete('/:id', (req: Request, res: Response) => {
