@@ -1,0 +1,311 @@
+name: Deploy OpenVision AI to Railway
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: '18'
+  PYTHON_VERSION: '3.11'
+  RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+jobs:
+  # Build and test all services
+  build:
+    name: Build Services
+    runs-on: ubuntu-latest
+
+    outputs:
+      backend_image: ${{ steps.build_backend.outputs.image }}
+      dashboard_image: ${{ steps.build_dashboard.outputs.image }}
+      api_image: ${{ steps.build_api.outputs.image }}
+      rules_engine_image: ${{ steps.build_rules_engine.outputs.image }}
+      video_processor_image: ${{ steps.build_video_processor.outputs.image }}
+      ai_summary_image: ${{ steps.build_ai_summary.outputs.image }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Build backend
+      - name: Build Backend Docker Image
+        id: build_backend
+        run: |
+          docker build -f apps/backend/Dockerfile -t openvision-backend:${{ github.sha }} apps/backend
+          echo "image=railway-registry.up.railway.app/openvision/backend:${{ github.sha }}" >> $GITHUB_OUTPUT
+
+      # Build dashboard
+      - name: Build Dashboard Docker Image
+        id: build_dashboard
+        run: |
+          docker build -f apps/dashboard/Dockerfile -t openvision-dashboard:${{ github.sha }} apps/dashboard
+          echo "image=railway-registry.up.railway.app/openvision/dashboard:${{ github.sha }}" >> $GITHUB_OUTPUT
+
+      # Build API service
+      - name: Build API Docker Image
+        id: build_api
+        run: |
+          docker build -t openvision-api:${{ github.sha }} services/api
+          echo "image=railway-registry.up.railway.app/openvision/api:${{ github.sha }}" >> $GITHUB_OUTPUT
+
+      # Build rules-engine
+      - name: Build Rules Engine Docker Image
+        id: build_rules_engine
+        run: |
+          docker build -t openvision-rules-engine:${{ github.sha }} services/rules-engine
+          echo "image=railway-registry.up.railway.app/openvision/rules-engine:${{ github.sha }}" >> $GITHUB_OUTPUT
+
+      # Build video-processor
+      - name: Build Video Processor Docker Image
+        id: build_video_processor
+        run: |
+          docker build -t openvision-video-processor:${{ github.sha }} services/video-processor
+          echo "image=railway-registry.up.railway.app/openvision/video-processor:${{ github.sha }}" >> $GITHUB_OUTPUT
+
+      # Build ai-summary
+      - name: Build AI Summary Docker Image
+        id: build_ai_summary
+        run: |
+          docker build -f services/ai-summary/Dockerfile -t openvision-ai-summary:${{ github.sha }} services/ai-summary
+          echo "image=railway-registry.up.railway.app/openvision/ai-summary:${{ github.sha }}" >> $GITHUB_OUTPUT
+
+  # Deploy database (PostgreSQL) first
+  deploy-database:
+    name: Deploy PostgreSQL Database
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        run: |
+          curl -fsSL https://railway.app/install.sh | sh
+          echo "$HOME/.railway/bin" >> $GITHUB_PATH
+
+      - name: Authenticate with Railway
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: railway login --token $RAILWAY_TOKEN
+
+      - name: Create PostgreSQL database
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          railway variables --set DATABASE_URL=${{ vars.RAILWAY_DATABASE_URL }}
+          railway up --project openvision-ai --service database
+
+  # Deploy backend service
+  deploy-backend:
+    name: Deploy Backend Service
+    runs-on: ubuntu-latest
+    needs: deploy-database
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        run: |
+          curl -fsSL https://railway.app/install.sh | sh
+          echo "$HOME/.railway/bin" >> $GITHUB_PATH
+
+      - name: Authenticate with Railway
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: railway login --token $RAILWAY_TOKEN
+
+      - name: Deploy Backend
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          cd apps/backend
+          railway up --project openvision-ai --service backend
+          railway variables --set NODE_ENV=production
+          railway variables --set PORT=3001
+
+      - name: Health check Backend
+        run: |
+          sleep 10
+          curl -f http://backend.up.railway.app/health || exit 1
+
+  # Deploy API service
+  deploy-api:
+    name: Deploy API Service
+    runs-on: ubuntu-latest
+    needs: deploy-backend
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        run: |
+          curl -fsSL https://railway.app/install.sh | sh
+          echo "$HOME/.railway/bin" >> $GITHUB_PATH
+
+      - name: Authenticate with Railway
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: railway login --token $RAILWAY_TOKEN
+
+      - name: Deploy API
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          cd services/api
+          railway up --project openvision-ai --service api
+          railway variables --set PYTHON_ENV=production
+
+      - name: Health check API
+        run: |
+          sleep 10
+          curl -f http://api.up.railway.app/health || exit 1
+
+  # Deploy Rules Engine
+  deploy-rules-engine:
+    name: Deploy Rules Engine
+    runs-on: ubuntu-latest
+    needs: deploy-backend
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        run: |
+          curl -fsSL https://railway.app/install.sh | sh
+          echo "$HOME/.railway/bin" >> $GITHUB_PATH
+
+      - name: Authenticate with Railway
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: railway login --token $RAILWAY_TOKEN
+
+      - name: Deploy Rules Engine
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          cd services/rules-engine
+          railway up --project openvision-ai --service rules-engine
+
+      - name: Health check Rules Engine
+        run: |
+          sleep 10
+          curl -f http://rules-engine.up.railway.app/health || exit 1
+
+  # Deploy Video Processor
+  deploy-video-processor:
+    name: Deploy Video Processor
+    runs-on: ubuntu-latest
+    needs: deploy-api
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        run: |
+          curl -fsSL https://railway.app/install.sh | sh
+          echo "$HOME/.railway/bin" >> $GITHUB_PATH
+
+      - name: Authenticate with Railway
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: railway login --token $RAILWAY_TOKEN
+
+      - name: Deploy Video Processor
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          cd services/video-processor
+          railway up --project openvision-ai --service video-processor
+
+      - name: Health check Video Processor
+        run: |
+          sleep 15
+          curl -f http://video-processor.up.railway.app/health || exit 1
+
+  # Deploy AI Summary service
+  deploy-ai-summary:
+    name: Deploy AI Summary Service
+    runs-on: ubuntu-latest
+    needs: deploy-video-processor
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        run: |
+          curl -fsSL https://railway.app/install.sh | sh
+          echo "$HOME/.railway/bin" >> $GITHUB_PATH
+
+      - name: Authenticate with Railway
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: railway login --token $RAILWAY_TOKEN
+
+      - name: Deploy AI Summary
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          cd services/ai-summary
+          railway up --project openvision-ai --service ai-summary
+          railway variables --set FLASK_ENV=production
+
+      - name: Health check AI Summary
+        run: |
+          sleep 10
+          curl -f http://ai-summary.up.railway.app/health || exit 1
+
+  # Deploy Dashboard (frontend) - can be deployed in parallel with other services
+  deploy-dashboard:
+    name: Deploy Dashboard Frontend
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        run: |
+          curl -fsSL https://railway.app/install.sh | sh
+          echo "$HOME/.railway/bin" >> $GITHUB_PATH
+
+      - name: Authenticate with Railway
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: railway login --token $RAILWAY_TOKEN
+
+      - name: Deploy Dashboard
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          cd apps/dashboard
+          railway up --project openvision-ai --service dashboard
+
+      - name: Health check Dashboard
+        run: |
+          sleep 10
+          curl -f http://dashboard.up.railway.app/ || exit 1
+
+  # Notify completion
+  notify:
+    name: Deployment Complete
+    runs-on: ubuntu-latest
+    needs: [deploy-backend, deploy-api, deploy-rules-engine, deploy-video-processor, deploy-ai-summary, deploy-dashboard]
+    if: always()
+
+    steps:
+      - name: Deployment Summary
+        run: |
+          echo "## OpenVision AI Deployment Complete"
+          echo "- Backend: http://backend.up.railway.app"
+          echo "- API: http://api.up.railway.app"
+          echo "- Rules Engine: http://rules-engine.up.railway.app"
+          echo "- Video Processor: http://video-processor.up.railway.app"
+          echo "- AI Summary: http://ai-summary.up.railway.app"
+          echo "- Dashboard: http://dashboard.up.railway.app"

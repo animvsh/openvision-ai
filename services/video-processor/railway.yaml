@@ -1,0 +1,21 @@
+build:
+  builder: DOCKERFILE
+  dockerfile: Dockerfile
+
+deploy:
+  numInstances: 1
+  healthCheckPath: /health
+  port: 8080
+  restartPolicyType: ON_FAILURE
+  restartPolicyMaxRetries: 10
+
+# Environment variables reference - set these in Railway dashboard
+env:
+  optional:
+    - AWS_REGION=us-east-1
+    - AWS_ACCESS_KEY_ID
+    - AWS_SECRET_ACCESS_KEY
+    - DYNAMODB_TABLE=VideoProcessingJobs
+    - KINESIS_STREAM=DetectionEvents
+    - S3_BUCKET=openvision-videos
+    - PORT=8080

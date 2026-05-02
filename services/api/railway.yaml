@@ -1,0 +1,31 @@
+build:
+  builder: DOCKERFILE
+  dockerfile: Dockerfile
+
+deploy:
+  numInstances: 1
+  healthCheckPath: /health
+  port: 8000
+  restartPolicyType: ON_FAILURE
+  restartPolicyMaxRetries: 10
+
+# Environment variables reference - set these in Railway dashboard
+env:
+  auto:
+    - DATABASE_URL  # Railway PostgreSQL plugin auto-injects this
+  required:
+    - JWT_SECRET
+  optional:
+    - AWS_REGION=us-east-1
+    - AWS_ACCESS_KEY_ID
+    - AWS_SECRET_ACCESS_KEY
+    - DYNAMODB_TABLE=VideoProcessingJobs
+    - CAMERA_STATE_TABLE=CameraState
+    - EVENTS_TABLE=Events
+    - KINESIS_STREAM=DetectionEvents
+    - SNS_TOPIC_ARN
+    - COGNITO_USER_POOL_ID
+    - COGNITO_CLIENT_ID
+    - WEBSOCKET_URL
+    - API_STAGE=production
+    - CORS_ORIGINS=*

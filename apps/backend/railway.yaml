@@ -6,3 +6,28 @@ deploy:
   numInstances: 1
   healthCheckPath: /health
   port: 3001
+  restartPolicyType: ON_FAILURE
+  restartPolicyMaxRetries: 10
+
+# Environment variables reference - set these in Railway dashboard
+# Variables marked as "auto" are injected by Railway plugins
+env:
+  auto:
+    - DATABASE_URL  # If using Railway PostgreSQL plugin
+  required:
+    - JWT_SECRET
+    - NODE_ENV=production
+  optional:
+    - AWS_ACCESS_KEY_ID
+    - AWS_SECRET_ACCESS_KEY
+    - AWS_REGION=us-east-1
+    - DYNAMODB_TABLE_CAMERAS=openvision-cameras
+    - DYNAMODB_TABLE_EVENTS=openvision-events
+    - DYNAMODB_TABLE_ALERTS=openvision-alerts
+    - CORS_ORIGINS
+    - SNS_TOPIC_ARN
+    - SQS_QUEUE_URL
+    - TELEGRAM_BOT_TOKEN
+    - TELEGRAM_CHAT_IDS
+    - SES_FROM_EMAIL
+    - SES_TO_EMAILS

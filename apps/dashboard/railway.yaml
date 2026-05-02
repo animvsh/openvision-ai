@@ -1,0 +1,16 @@
+build:
+  builder: DOCKERFILE
+  dockerfilePath: Dockerfile
+
+deploy:
+  numInstances: 1
+  healthCheckPath: /health
+  port: 80
+  restartPolicyType: ON_FAILURE
+  restartPolicyMaxRetries: 10
+
+# Environment variables for frontend build
+# These are baked into the React build at compile time via vite.config.ts
+env:
+  VITE_API_URL: http://backend.railway.internal:3001
+  VITE_WS_URL: ws://backend.railway.internal:3001/ws
